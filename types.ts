@@ -39,7 +39,6 @@ export interface Transaction {
   time: string;
   category: string;
   type: 'income' | 'expense';
-  // Novos campos para venda manual
   customerName?: string;
   customerGender?: Gender;
   paymentMethod?: PaymentMethod;
