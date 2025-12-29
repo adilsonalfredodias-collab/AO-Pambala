@@ -37,10 +37,11 @@ export const INITIAL_PRODUCTS: Product[] = [
   }
 ];
 
+// Fixed: Added missing category property to match Client interface requirements
 export const INITIAL_CLIENTS: Client[] = [
-  { id: '1', name: 'Ana Silva', phone: '(11) 98765-4321', email: 'ana@email.com', lastPurchase: 'Hoje', status: 'active' },
-  { id: '2', name: 'Carlos Souza', phone: '(21) 91234-5678', email: 'carlos@email.com', lastPurchase: '2 dias atrás', status: 'active' },
-  { id: '3', name: 'Mariana Costa', phone: '(31) 99876-5432', email: 'mari@email.com', lastPurchase: '1 semana atrás', status: 'pending' }
+  { id: '1', name: 'Ana Silva', phone: '(11) 98765-4321', email: 'ana@email.com', category: 'Fiel', lastPurchase: 'Hoje', status: 'active' },
+  { id: '2', name: 'Carlos Souza', phone: '(21) 91234-5678', email: 'carlos@email.com', category: 'Recorrente', lastPurchase: '2 dias atrás', status: 'active' },
+  { id: '3', name: 'Mariana Costa', phone: '(31) 99876-5432', email: 'mari@email.com', category: 'Novo', lastPurchase: '1 semana atrás', status: 'pending' }
 ];
 
 export const INITIAL_TRANSACTIONS: Transaction[] = [

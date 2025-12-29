@@ -1,5 +1,7 @@
 
-export type View = 'home' | 'products' | 'clients' | 'sales' | 'adjustments' | 'productForm' | 'clientForm' | 'reports' | 'saleSuccess' | 'manualSaleDetails';
+export type View = 'home' | 'products' | 'clients' | 'sales' | 'adjustments' | 'productForm' | 'clientForm' | 'reports' | 'saleSuccess' | 'manualSaleDetails' | 'expenses' | 'expenseForm' | 'profile' | 'menu';
+
+export type ClientCategory = 'Novo' | 'Recorrente' | 'VIP' | 'Fiel';
 
 export interface Product {
   id: string;
@@ -18,6 +20,7 @@ export interface Client {
   name: string;
   phone: string;
   email: string;
+  category: ClientCategory;
   lastPurchase?: string;
   status: 'active' | 'pending';
 }
