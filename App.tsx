@@ -3,11 +3,16 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { View, Product, Client, Transaction, SaleItem, PaymentMethod, Gender, ClientCategory } from './types';
 import { INITIAL_PRODUCTS, INITIAL_CLIENTS, INITIAL_TRANSACTIONS } from './mockData';
 import { generateProductDescription } from './geminiService';
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell } from 'recharts';
+import { 
+  BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, 
+  PieChart, Pie, Cell, Legend, CartesianGrid 
+} from 'recharts';
 
 const MUNICIPAIS = ['Luanda', 'Belas', 'Cazenga', 'Cacuaco', 'Viana', 'Talatona', 'Kilamba Kiaxi', 'Icolo e Bengo', 'Quiçama'];
 const CATEGORIAS_PRODUTO = ['Vestuário', 'Calçados', 'Acessórios', 'Eletrônicos', 'Beleza'];
 const CATEGORIAS_CLIENTE: ClientCategory[] = ['Novo', 'Recorrente', 'VIP', 'Fiel'];
+
+const COLORS = ['#13ec80', '#0ea65a', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 const Navigation: React.FC<{ activeView: View; setView: (v: View) => void }> = ({ activeView, setView }) => {
   const items: { id: View; icon: string; label: string }[] = [
@@ -48,11 +53,12 @@ const Toast: React.FC<{ message: string; show: boolean }> = ({ message, show }) 
 
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [pin, setPin] = useState('');
   const [view, setView] = useState<View>('home');
   const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
   const [clients, setClients] = useState<Client[]>(INITIAL_CLIENTS);
   const [transactions, setTransactions] = useState<Transaction[]>(INITIAL_TRANSACTIONS);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(true);
   const [toast, setToast] = useState({ show: false, message: '' });
   const [lastSaleId, setLastSaleId] = useState<string | null>(null);
 
@@ -73,14 +79,12 @@ const App: React.FC = () => {
     quantities: {} as Record<string, number>
   });
 
-  // Estados de Edição
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [productForm, setProductForm] = useState({ name: '', cat: 'Vestuário', price: '', stock: '', sku: '', cost: '' });
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [clientForm, setClientForm] = useState({ name: '', phone: '', email: '', category: 'Novo' as ClientCategory });
   
   const [iaDesc, setIaDesc] = useState('');
-  const [isGeneratingIA, setIsGeneratingIA] = useState(false);
 
   useEffect(() => {
     isDarkMode ? document.documentElement.classList.add('dark') : document.documentElement.classList.remove('dark');
@@ -90,6 +94,54 @@ const App: React.FC = () => {
     setToast({ show: true, message });
     setTimeout(() => setToast({ show: false, message: '' }), 3000);
   };
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pin === '1234') {
+      setIsAuthenticated(true);
+      showToast("Bem-vindo ao Pambala AO");
+    } else {
+      showToast("PIN incorreto");
+    }
+  };
+
+  // --- Analíticos ---
+  const reportData = useMemo(() => {
+    const productSalesMap: Record<string, number> = {};
+    const categorySalesMap: Record<string, number> = {};
+    const locationSalesMap: Record<string, number> = {};
+
+    transactions.forEach(t => {
+      if (t.type === 'income') {
+        // Location mapping
+        const loc = t.deliveryLocation || 'Balcão';
+        locationSalesMap[loc] = (locationSalesMap[loc] || 0) + 1;
+
+        // Items mapping
+        t.items?.forEach(item => {
+          const prod = products.find(p => p.id === item.productId);
+          if (prod) {
+            productSalesMap[prod.name] = (productSalesMap[prod.name] || 0) + item.quantity;
+            categorySalesMap[prod.category] = (categorySalesMap[prod.category] || 0) + item.quantity;
+          }
+        });
+      }
+    });
+
+    const topProducts = Object.entries(productSalesMap)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5);
+
+    const categorySales = Object.entries(categorySalesMap)
+      .map(([name, value]) => ({ name, value }));
+
+    const locationSales = Object.entries(locationSalesMap)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+
+    return { topProducts, categorySales, locationSales };
+  }, [transactions, products]);
 
   // --- Handlers de Produto ---
   const startAddProduct = () => {
@@ -108,7 +160,7 @@ const App: React.FC = () => {
 
   const deleteProduct = (id: string) => {
     setProducts(prev => prev.filter(p => p.id !== id));
-    showToast("Produto removido do stock");
+    showToast("Produto removido");
   };
 
   const handleProductSubmit = (e: React.FormEvent) => {
@@ -118,7 +170,7 @@ const App: React.FC = () => {
         ...p, name: productForm.name, category: productForm.cat, salePrice: Number(productForm.price),
         stock: Number(productForm.stock), sku: productForm.sku, costPrice: Number(productForm.cost), description: iaDesc
       } : p));
-      showToast("Produto atualizado!");
+      showToast("Atualizado!");
     } else {
       const prod: Product = {
         id: `P${Date.now()}`, name: productForm.name, sku: productForm.sku || `SKU-${Math.floor(Math.random() * 1000)}`,
@@ -126,7 +178,7 @@ const App: React.FC = () => {
         stock: Number(productForm.stock), image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=200&auto=format&fit=crop', description: iaDesc
       };
       setProducts(prev => [prod, ...prev]);
-      showToast("Produto adicionado!");
+      showToast("Adicionado!");
     }
     setView('products');
   };
@@ -160,7 +212,12 @@ const App: React.FC = () => {
   const downloadInvoice = (saleId: string) => {
     const sale = transactions.find(t => t.id === saleId);
     if (!sale) return;
-    let text = `FACTURA - ${profile.storeName}\nID: ${sale.id}\nData: ${sale.date}\nTotal: Kz ${sale.amount.toLocaleString()}\nObrigado!`;
+    let text = `FACTURA - ${profile.storeName}\n----------------\nID: ${sale.id}\nData: ${sale.date} ${sale.time}\nLocal: ${sale.deliveryLocation}\n----------------\n`;
+    sale.items?.forEach(i => {
+      const p = products.find(x => x.id === i.productId);
+      text += `${p?.name} x${i.quantity} - Kz ${i.priceAtSale.toLocaleString()}\n`;
+    });
+    text += `----------------\nTOTAL: Kz ${sale.amount.toLocaleString()}\nObrigado por comprar connosco!`;
     const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -189,13 +246,31 @@ const App: React.FC = () => {
 
   if (!isAuthenticated) {
     return (
-      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-background-light dark:bg-background-dark p-8 justify-center items-center">
-        <div className="size-20 bg-primary rounded-3xl flex items-center justify-center mb-6 shadow-xl rotate-12 transition-transform hover:rotate-0">
-          <span className="material-symbols-outlined text-background-dark text-4xl font-bold">payments</span>
+      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-background-dark p-8 justify-center items-center relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-primary/10 to-transparent pointer-events-none" />
+        <div className="size-24 bg-primary rounded-[2.5rem] flex items-center justify-center mb-8 shadow-2xl animate-pulse relative z-10">
+          <span className="material-symbols-outlined text-background-dark text-5xl font-bold">payments</span>
         </div>
-        <h1 className="text-3xl font-extrabold dark:text-white mb-2 italic">PAMBALA AO</h1>
-        <p className="text-slate-500 text-sm font-medium mb-10 text-center">Gestão Inteligente para o Empreendedor Angolano</p>
-        <button onClick={() => setIsAuthenticated(true)} className="w-full bg-primary text-background-dark font-black py-4 rounded-2xl shadow-lg active:scale-95">ACEDER AO SISTEMA</button>
+        <h1 className="text-4xl font-black text-white mb-2 tracking-tighter relative z-10">PAMBALA AO</h1>
+        <p className="text-slate-500 text-sm font-bold mb-12 text-center relative z-10 uppercase tracking-widest">Seu Kwanza, Suas Regras</p>
+        
+        <form onSubmit={handleLogin} className="w-full space-y-4 relative z-10">
+          <input 
+            type="password" 
+            placeholder="Digite seu PIN (1234)" 
+            value={pin}
+            onChange={(e) => setPin(e.target.value)}
+            className="w-full bg-surface-dark border-none rounded-2xl p-5 text-center text-2xl font-black tracking-[1em] text-primary focus:ring-2 focus:ring-primary/50"
+            maxLength={4}
+          />
+          <button type="submit" className="w-full bg-primary text-background-dark font-black py-5 rounded-2xl shadow-xl active:scale-95 transition-transform">ENTRAR NO SISTEMA</button>
+        </form>
+
+        <footer className="mt-20 text-center relative z-10">
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-1">Projecto Proprietário</p>
+          <p className="text-xs font-black text-slate-300">Desenvolvido por:</p>
+          <p className="text-primary font-black text-sm">Adilson Alfredo Adão Dias</p>
+        </footer>
       </div>
     );
   }
@@ -221,7 +296,7 @@ const App: React.FC = () => {
                <h1 className="text-4xl font-black">Kz {transactions.reduce((a, b) => a + b.amount, 0).toLocaleString()}</h1>
                <div className="mt-6 flex gap-3 relative z-10">
                  <button onClick={() => setView('sales')} className="flex-1 bg-primary text-background-dark py-3 rounded-xl font-black text-xs uppercase shadow-lg shadow-primary/20">Vender</button>
-                 <button onClick={() => setView('expenses')} className="flex-1 bg-white/10 backdrop-blur-md py-3 rounded-xl font-black text-xs uppercase">Gastos</button>
+                 <button onClick={() => setView('reports')} className="flex-1 bg-white/10 backdrop-blur-md py-3 rounded-xl font-black text-xs uppercase">Estatísticas</button>
                </div>
             </div>
 
@@ -235,6 +310,78 @@ const App: React.FC = () => {
                   <p className="text-xl font-black">{products.length}</p>
                </div>
             </section>
+          </div>
+        )}
+
+        {view === 'reports' && (
+          <div className="animate-in p-4 space-y-6">
+            <header className="flex items-center gap-4">
+              <button onClick={() => setView('home')} className="size-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center"><span className="material-symbols-outlined">arrow_back</span></button>
+              <h1 className="text-xl font-black">Relatórios de Venda</h1>
+            </header>
+
+            <div className="space-y-6">
+              {/* Top Products */}
+              <div className="bg-white dark:bg-slate-800 p-5 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700">
+                <h3 className="text-xs font-black uppercase text-slate-400 mb-4 tracking-wider">Produtos Mais Vendidos (Qtd)</h3>
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={reportData.topProducts} layout="vertical">
+                      <XAxis type="number" hide />
+                      <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 10, fontWeight: 700 }} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#16201c', borderRadius: '12px', border: 'none', color: '#fff' }}
+                        itemStyle={{ color: '#13ec80' }}
+                      />
+                      <Bar dataKey="value" fill="#13ec80" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Category Breakdown */}
+              <div className="bg-white dark:bg-slate-800 p-5 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700">
+                <h3 className="text-xs font-black uppercase text-slate-400 mb-4 tracking-wider">Categorias em Destaque</h3>
+                <div className="h-64 w-full flex items-center">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={reportData.categorySales}
+                        cx="50%" cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {reportData.categorySales.map((_, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend verticalAlign="bottom" height={36} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Location Performance */}
+              <div className="bg-white dark:bg-slate-800 p-5 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700">
+                <h3 className="text-xs font-black uppercase text-slate-400 mb-4 tracking-wider">Volume por Localidade</h3>
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={reportData.locationSales}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
+                      <XAxis dataKey="name" tick={{ fontSize: 9, fontWeight: 700 }} />
+                      <YAxis tick={{ fontSize: 9 }} />
+                      <Tooltip 
+                         contentStyle={{ backgroundColor: '#16201c', borderRadius: '12px', border: 'none', color: '#fff' }}
+                      />
+                      <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -317,29 +464,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {view === 'clientForm' && (
-          <div className="animate-in p-4 space-y-6">
-            <header className="flex items-center gap-4">
-              <button onClick={() => setView('clients')} className="size-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center"><span className="material-symbols-outlined">arrow_back</span></button>
-              <h1 className="text-xl font-black">{editingClient ? 'Editar Perfil' : 'Novo Cliente'}</h1>
-            </header>
-            <form onSubmit={handleClientSubmit} className="space-y-4">
-              <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl space-y-4 border border-slate-100 dark:border-slate-800 shadow-sm">
-                <div><label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Nome Completo</label><input required value={clientForm.name} onChange={e => setClientForm({...clientForm, name: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border-none rounded-xl p-3 font-bold text-sm" /></div>
-                <div><label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Terminal / WhatsApp</label><input required value={clientForm.phone} onChange={e => setClientForm({...clientForm, phone: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border-none rounded-xl p-3 font-bold text-sm" /></div>
-                <div><label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Categoria de Fidelidade</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {CATEGORIAS_CLIENTE.map(cat => (
-                      <button type="button" key={cat} onClick={() => setClientForm({...clientForm, category: cat})} className={`py-2 rounded-xl text-[10px] font-black border-2 transition-all ${clientForm.category === cat ? 'bg-primary border-primary text-background-dark' : 'border-slate-100 text-slate-400'}`}>{cat}</button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <button type="submit" className="w-full bg-primary text-background-dark py-4 rounded-2xl font-black shadow-lg">SALVAR CLIENTE</button>
-            </form>
-          </div>
-        )}
-
         {view === 'sales' && (
           <div className="animate-in p-4 space-y-6">
             <h1 className="text-2xl font-black">Vender Artigos</h1>
@@ -417,6 +541,11 @@ const App: React.FC = () => {
                 </button>
               ))}
             </div>
+
+            <footer className="mt-8 text-center border-t border-slate-800 pt-8 opacity-50">
+               <p className="text-[10px] font-bold uppercase tracking-widest mb-1 text-slate-500">Autor do Projecto</p>
+               <p className="text-xs font-black text-slate-300">Adilson Alfredo Adão Dias</p>
+            </footer>
           </div>
         )}
 
