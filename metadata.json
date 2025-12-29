@@ -1,0 +1,7 @@
+{
+  "name": "Pambala AO",
+  "description": "Uma solução completa de gestão de estoque, clientes e vendas para pequenos empreendedores em Angola, com interface moderna e intuitiva.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
